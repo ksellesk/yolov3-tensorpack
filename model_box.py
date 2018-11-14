@@ -18,7 +18,7 @@ def clip_boxes(boxes, window, name=None):
         window: [h, w]
     """
     boxes = tf.maximum(boxes, 0.0)
-    m = tf.tile(tf.reverse(window, [0]), [2])    # (4,)
+    m = tf.tile(tf.reverse(window, [0]), [2])  # (4,)
     boxes = tf.minimum(boxes, tf.to_float(m), name=name)
     return boxes
 
@@ -47,7 +47,7 @@ def decode_bbox_target(box_predictions, anchors):
     wbhb = tf.exp(tf.minimum(box_pred_twth, clip)) * waha
     xbyb = box_pred_txty * waha + xaya
     x1y1 = xbyb - wbhb * 0.5
-    x2y2 = xbyb + wbhb * 0.5    # (...)x1x2
+    x2y2 = xbyb + wbhb * 0.5  # (...)x1x2
     out = tf.concat([x1y1, x2y2], axis=-2)
     return tf.reshape(out, orig_shape)
 
@@ -98,7 +98,8 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
     # TF's crop_and_resize produces zeros on border
     if pad_border:
         # this can be quite slow
-        image = tf.pad(image, [[0, 0], [0, 0], [1, 1], [1, 1]], mode='SYMMETRIC')
+        image = tf.pad(
+            image, [[0, 0], [0, 0], [1, 1], [1, 1]], mode='SYMMETRIC')
         boxes = boxes + 1
 
     @under_name_scope()
@@ -128,8 +129,10 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
         nx0 = (x0 + spacing_w / 2 - 0.5) / tf.to_float(image_shape[1] - 1)
         ny0 = (y0 + spacing_h / 2 - 0.5) / tf.to_float(image_shape[0] - 1)
 
-        nw = spacing_w * tf.to_float(crop_shape[1] - 1) / tf.to_float(image_shape[1] - 1)
-        nh = spacing_h * tf.to_float(crop_shape[0] - 1) / tf.to_float(image_shape[0] - 1)
+        nw = spacing_w * tf.to_float(crop_shape[1] -
+                                     1) / tf.to_float(image_shape[1] - 1)
+        nh = spacing_h * tf.to_float(crop_shape[0] -
+                                     1) / tf.to_float(image_shape[0] - 1)
 
         return tf.concat([ny0, nx0, ny0 + nh, nx0 + nw], axis=1)
 
@@ -144,11 +147,10 @@ def crop_and_resize(image, boxes, box_ind, crop_size, pad_border=True):
 
     image_shape = tf.shape(image)[2:]
     boxes = transform_fpcoor_for_tf(boxes, image_shape, [crop_size, crop_size])
-    image = tf.transpose(image, [0, 2, 3, 1])   # nhwc
+    image = tf.transpose(image, [0, 2, 3, 1])  # nhwc
     ret = tf.image.crop_and_resize(
-        image, boxes, tf.to_int32(box_ind),
-        crop_size=[crop_size, crop_size])
-    ret = tf.transpose(ret, [0, 3, 1, 2])   # ncss
+        image, boxes, tf.to_int32(box_ind), crop_size=[crop_size, crop_size])
+    ret = tf.transpose(ret, [0, 3, 1, 2])  # ncss
     return ret
 
 
@@ -164,20 +166,22 @@ def roi_align(featuremap, boxes, resolution):
         NxCx res x res
     """
     # sample 4 locations per roi bin
-    ret = crop_and_resize(
-        featuremap, boxes,
-        tf.zeros([tf.shape(boxes)[0]], dtype=tf.int32),
-        resolution * 2)
-    ret = tf.nn.avg_pool(ret, [1, 1, 2, 2], [1, 1, 2, 2], padding='SAME', data_format='NCHW')
+    ret = crop_and_resize(featuremap, boxes,
+                          tf.zeros([tf.shape(boxes)[0]], dtype=tf.int32),
+                          resolution * 2)
+    ret = tf.nn.avg_pool(
+        ret, [1, 1, 2, 2], [1, 1, 2, 2], padding='SAME', data_format='NCHW')
     return ret
 
 
-class RPNAnchors(namedtuple('_RPNAnchors', ['boxes', 'gt_labels', 'gt_boxes'])):
+class RPNAnchors(
+        namedtuple('_RPNAnchors', ['boxes', 'gt_labels', 'gt_boxes'])):
     """
     boxes (FS x FS x NA x 4): The anchor boxes.
     gt_labels (FS x FS x NA):
     gt_boxes (FS x FS x NA x 4): Groundtruth boxes corresponding to each anchor.
     """
+
     def encoded_gt_boxes(self):
         return encode_bbox_target(self.gt_boxes, self.boxes)
 
@@ -210,8 +214,7 @@ if __name__ == '__main__':
     boxes = np.asarray([[1, 1, 3, 3]], dtype='float32')
     target = 4
 
-    print(crop_and_resize(
-        image[None, None, :, :], boxes, [0], target)[0][0])
+    print(crop_and_resize(image[None, None, :, :], boxes, [0], target)[0][0])
     """
     Expected values:
     4.5 5 5.5 6
@@ -222,6 +225,7 @@ if __name__ == '__main__':
     You cannot easily get the above results with tf.image.crop_and_resize.
     Try out yourself here:
     """
-    print(tf.image.crop_and_resize(
-        image[None, :, :, None],
-        np.asarray([[1, 1, 2, 2]]) / 4.0, [0], [target, target])[0][:, :, 0])
+    print(
+        tf.image.crop_and_resize(image[None, :, :, None],
+                                 np.asarray([[1, 1, 2, 2]]) / 4.0, [0],
+                                 [target, target])[0][:, :, 0])

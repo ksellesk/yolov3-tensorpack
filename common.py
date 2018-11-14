@@ -46,8 +46,8 @@ class CustomResize(transform.TransformAugmentorBase):
 
     def _get_augment_params(self, img):
         h, w = img.shape[:2]
-        size = self.rng.randint(
-            self.short_edge_length[0], self.short_edge_length[1] + 1)
+        size = self.rng.randint(self.short_edge_length[0],
+                                self.short_edge_length[1] + 1)
         scale = size * 1.0 / min(h, w)
         if h < w:
             newh, neww = size, scale * w
@@ -83,8 +83,8 @@ def point8_to_box(points):
         nx4 boxes (x1y1x2y2)
     """
     p = points.reshape((-1, 4, 2))
-    minxy = p.min(axis=1)   # nx2
-    maxxy = p.max(axis=1)   # nx2
+    minxy = p.min(axis=1)  # nx2
+    maxxy = p.max(axis=1)  # nx2
     return np.concatenate((minxy, maxxy), axis=1)
 
 
@@ -134,9 +134,6 @@ def filter_boxes_inside_shape(boxes, shape):
     assert boxes.ndim == 2, boxes.shape
     assert len(shape) == 2, shape
     h, w = shape
-    indices = np.where(
-        (boxes[:, 0] >= 0) &
-        (boxes[:, 1] >= 0) &
-        (boxes[:, 2] <= w) &
-        (boxes[:, 3] <= h))[0]
+    indices = np.where((boxes[:, 0] >= 0) & (boxes[:, 1] >= 0) &
+                       (boxes[:, 2] <= w) & (boxes[:, 3] <= h))[0]
     return indices, boxes[indices, :]

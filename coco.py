@@ -13,7 +13,6 @@ from tensorpack.utils.argtools import log_once
 
 from config import config as cfg
 
-
 __all__ = ['COCODetection', 'COCOMeta']
 
 
@@ -33,15 +32,20 @@ class _COCOMeta(object):
         cat_names: list of names
         """
         assert not self.valid()
-        assert len(cat_ids) == cfg.DATA.NUM_CATEGORY and len(cat_names) == cfg.DATA.NUM_CATEGORY
+        assert len(cat_ids) == cfg.DATA.NUM_CATEGORY and len(
+            cat_names) == cfg.DATA.NUM_CATEGORY
         self.cat_names = cat_names
         self.class_names = ['BG'] + self.cat_names
 
         # background has class id of 0
         self.category_id_to_class_id = {
-            v: i + 1 for i, v in enumerate(cat_ids)}
+            v: i + 1
+            for i, v in enumerate(cat_ids)
+        }
         self.class_id_to_category_id = {
-            v: k for k, v in self.category_id_to_class_id.items()}
+            v: k
+            for k, v in self.category_id_to_class_id.items()
+        }
         cfg.DATA.CLASS_NAMES = self.class_names
 
 
@@ -51,8 +55,9 @@ COCOMeta = _COCOMeta()
 class COCODetection(object):
     def __init__(self, basedir, name):
         self.name = name
-        self._imgdir = os.path.realpath(os.path.join(
-            basedir, COCOMeta.INSTANCE_TO_BASEDIR.get(name, name)))
+        self._imgdir = os.path.realpath(
+            os.path.join(basedir, COCOMeta.INSTANCE_TO_BASEDIR.get(name,
+                                                                   name)))
         assert os.path.isdir(self._imgdir), self._imgdir
         annotation_file = os.path.join(
             basedir, 'annotations/instances_{}.json'.format(name))
@@ -85,7 +90,8 @@ class COCODetection(object):
         """
         if add_mask:
             assert add_gt
-        with timed_operation('Load Groundtruth Boxes for {}'.format(self.name)):
+        with timed_operation('Load Groundtruth Boxes for {}'.format(
+                self.name)):
             img_ids = self.coco.getImgIds()
             img_ids.sort()
             # list of dict, each has keys: height,width,id,file_name
@@ -101,8 +107,7 @@ class COCODetection(object):
         """
         Change relative filename to abosolute file name.
         """
-        img['file_name'] = os.path.join(
-            self._imgdir, img['file_name'])
+        img['file_name'] = os.path.join(self._imgdir, img['file_name'])
         assert os.path.isfile(img['file_name']), img['file_name']
 
     def _add_detection_gt(self, img, add_mask):
@@ -112,7 +117,8 @@ class COCODetection(object):
         """
         # ann_ids = self.coco.getAnnIds(imgIds=img['id'])
         # objs = self.coco.loadAnns(ann_ids)
-        objs = self.coco.imgToAnns[img['id']]  # equivalent but faster than the above two lines
+        objs = self.coco.imgToAnns[
+            img['id']]  # equivalent but faster than the above two lines
 
         # clean-up boxes
         valid_objs = []
@@ -141,38 +147,46 @@ class COCODetection(object):
                         assert obj['iscrowd'] == 1
                         obj['segmentation'] = None
                     else:
-                        valid_segs = [np.asarray(p).reshape(-1, 2).astype('float32') for p in segs if len(p) >= 6]
+                        valid_segs = [
+                            np.asarray(p).reshape(-1, 2).astype('float32')
+                            for p in segs if len(p) >= 6
+                        ]
                         if len(valid_segs) < len(segs):
-                            log_once("Image {} has invalid polygons!".format(img['file_name']), 'warn')
+                            log_once(
+                                "Image {} has invalid polygons!".format(
+                                    img['file_name']), 'warn')
 
                         obj['segmentation'] = valid_segs
 
         # all geometrically-valid boxes are returned
-        boxes = np.asarray([obj['bbox'] for obj in valid_objs], dtype='float32')  # (n, 4)
+        boxes = np.asarray([obj['bbox'] for obj in valid_objs],
+                           dtype='float32')  # (n, 4)
         cls = np.asarray([
             COCOMeta.category_id_to_class_id[obj['category_id']]
-            for obj in valid_objs], dtype='int32')  # (n,)
-        is_crowd = np.asarray([obj['iscrowd'] for obj in valid_objs], dtype='int8')
+            for obj in valid_objs
+        ],
+                         dtype='int32')  # (n,)
+        is_crowd = np.asarray([obj['iscrowd'] for obj in valid_objs],
+                              dtype='int8')
 
         # add the keys
-        img['boxes'] = boxes        # nx4
-        img['class'] = cls          # n, always >0
+        img['boxes'] = boxes  # nx4
+        img['class'] = cls  # n, always >0
         img['is_crowd'] = is_crowd  # n,
         if add_mask:
             # also required to be float32
-            img['segmentation'] = [
-                obj['segmentation'] for obj in valid_objs]
+            img['segmentation'] = [obj['segmentation'] for obj in valid_objs]
 
     def print_class_histogram(self, imgs):
         nr_class = len(COCOMeta.class_names)
         hist_bins = np.arange(nr_class + 1)
 
         # Histogram of ground-truth objects
-        gt_hist = np.zeros((nr_class,), dtype=np.int)
+        gt_hist = np.zeros((nr_class, ), dtype=np.int)
         for entry in imgs:
             # filter crowd?
-            gt_inds = np.where(
-                (entry['class'] > 0) & (entry['is_crowd'] == 0))[0]
+            gt_inds = np.where((entry['class'] > 0) &
+                               (entry['is_crowd'] == 0))[0]
             gt_classes = entry['class'][gt_inds]
             gt_hist += np.histogram(gt_classes, bins=hist_bins)[0]
         data = [[COCOMeta.class_names[i], v] for i, v in enumerate(gt_hist)]

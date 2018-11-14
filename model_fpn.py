@@ -8,8 +8,8 @@ from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.tfutils.argscope import argscope
 from tensorpack.tfutils.tower import get_current_tower_context
 from tensorpack.tfutils.scope_utils import under_name_scope
-from tensorpack.models import (
-    Conv2D, layer_register, FixedUnPooling, MaxPooling)
+from tensorpack.models import (Conv2D, layer_register, FixedUnPooling,
+                               MaxPooling)
 
 from model_rpn import rpn_losses, generate_rpn_proposals
 from model_box import roi_align
@@ -34,7 +34,10 @@ def fpn_model(features):
 
     def upsample2x(name, x):
         return FixedUnPooling(
-            name, x, 2, unpool_mat=np.ones((2, 2), dtype='float32'),
+            name,
+            x,
+            2,
+            unpool_mat=np.ones((2, 2), dtype='float32'),
             data_format='channels_first')
 
         # tf.image.resize is, again, not aligned.
@@ -45,25 +48,45 @@ def fpn_model(features):
         #     x = tf.transpose(x, [0, 3, 1, 2])
         #     return x
 
-    with argscope(Conv2D, data_format='channels_first',
-                  activation=tf.identity, use_bias=True,
-                  kernel_initializer=tf.variance_scaling_initializer(scale=1.)):
-        lat_2345 = [Conv2D('lateral_1x1_c{}'.format(i + 2), c, num_channel, 1)
-                    for i, c in enumerate(features)]
+    with argscope(
+            Conv2D,
+            data_format='channels_first',
+            activation=tf.identity,
+            use_bias=True,
+            kernel_initializer=tf.variance_scaling_initializer(scale=1.)):
+        lat_2345 = [
+            Conv2D('lateral_1x1_c{}'.format(i + 2), c, num_channel, 1)
+            for i, c in enumerate(features)
+        ]
         if use_gn:
-            lat_2345 = [GroupNorm('gn_c{}'.format(i + 2), c) for i, c in enumerate(lat_2345)]
+            lat_2345 = [
+                GroupNorm('gn_c{}'.format(i + 2), c)
+                for i, c in enumerate(lat_2345)
+            ]
         lat_sum_5432 = []
         for idx, lat in enumerate(lat_2345[::-1]):
             if idx == 0:
                 lat_sum_5432.append(lat)
             else:
-                lat = lat + upsample2x('upsample_lat{}'.format(6 - idx), lat_sum_5432[-1])
+                lat = lat + upsample2x('upsample_lat{}'.format(6 - idx),
+                                       lat_sum_5432[-1])
                 lat_sum_5432.append(lat)
-        p2345 = [Conv2D('posthoc_3x3_p{}'.format(i + 2), c, num_channel, 3)
-                 for i, c in enumerate(lat_sum_5432[::-1])]
+        p2345 = [
+            Conv2D('posthoc_3x3_p{}'.format(i + 2), c, num_channel, 3)
+            for i, c in enumerate(lat_sum_5432[::-1])
+        ]
         if use_gn:
-            p2345 = [GroupNorm('gn_p{}'.format(i + 2), c) for i, c in enumerate(p2345)]
-        p6 = MaxPooling('maxpool_p6', p2345[-1], pool_size=1, strides=2, data_format='channels_first', padding='VALID')
+            p2345 = [
+                GroupNorm('gn_p{}'.format(i + 2), c)
+                for i, c in enumerate(p2345)
+            ]
+        p6 = MaxPooling(
+            'maxpool_p6',
+            p2345[-1],
+            pool_size=1,
+            strides=2,
+            data_format='channels_first',
+            padding='VALID')
         return p2345 + [p6]
 
 
@@ -82,19 +105,24 @@ def fpn_map_rois_to_levels(boxes):
     Be careful that the returned tensor could be empty.
     """
     sqrtarea = tf.sqrt(tf_area(boxes))
-    level = tf.to_int32(tf.floor(
-        4 + tf.log(sqrtarea * (1. / 224) + 1e-6) * (1.0 / np.log(2))))
+    level = tf.to_int32(
+        tf.floor(4 + tf.log(sqrtarea * (1. / 224) + 1e-6) * (1.0 / np.log(2))))
 
     # RoI levels range from 2~5 (not 6)
     level_ids = [
         tf.where(level <= 2),
-        tf.where(tf.equal(level, 3)),   # == is not supported
+        tf.where(tf.equal(level, 3)),  # == is not supported
         tf.where(tf.equal(level, 4)),
-        tf.where(level >= 5)]
-    level_ids = [tf.reshape(x, [-1], name='roi_level{}_id'.format(i + 2))
-                 for i, x in enumerate(level_ids)]
-    num_in_levels = [tf.size(x, name='num_roi_level{}'.format(i + 2))
-                     for i, x in enumerate(level_ids)]
+        tf.where(level >= 5)
+    ]
+    level_ids = [
+        tf.reshape(x, [-1], name='roi_level{}_id'.format(i + 2))
+        for i, x in enumerate(level_ids)
+    ]
+    num_in_levels = [
+        tf.size(x, name='num_roi_level{}'.format(i + 2))
+        for i, x in enumerate(level_ids)
+    ]
     add_moving_summary(*num_in_levels)
 
     level_boxes = [tf.gather(boxes, ids) for ids in level_ids]
@@ -120,7 +148,8 @@ def multilevel_roi_align(features, rcnn_boxes, resolution):
     for i, boxes, featuremap in zip(itertools.count(), level_boxes, features):
         with tf.name_scope('roi_level{}'.format(i + 2)):
             boxes_on_featuremap = boxes * (1.0 / cfg.FPN.ANCHOR_STRIDES[i])
-            all_rois.append(roi_align(featuremap, boxes_on_featuremap, resolution))
+            all_rois.append(
+                roi_align(featuremap, boxes_on_featuremap, resolution))
 
     # this can fail if using TF<=1.8 with MKL build
     all_rois = tf.concat(all_rois, axis=0)  # NCHW
@@ -131,8 +160,8 @@ def multilevel_roi_align(features, rcnn_boxes, resolution):
     return all_rois
 
 
-def multilevel_rpn_losses(
-        multilevel_anchors, multilevel_label_logits, multilevel_box_logits):
+def multilevel_rpn_losses(multilevel_anchors, multilevel_label_logits,
+                          multilevel_box_logits):
     """
     Args:
         multilevel_anchors: #lvl RPNAnchors
@@ -152,8 +181,10 @@ def multilevel_rpn_losses(
         for lvl in range(num_lvl):
             anchors = multilevel_anchors[lvl]
             label_loss, box_loss = rpn_losses(
-                anchors.gt_labels, anchors.encoded_gt_boxes(),
-                multilevel_label_logits[lvl], multilevel_box_logits[lvl],
+                anchors.gt_labels,
+                anchors.encoded_gt_boxes(),
+                multilevel_label_logits[lvl],
+                multilevel_box_logits[lvl],
                 name_scope='level{}'.format(lvl + 2))
             losses.extend([label_loss, box_loss])
 
@@ -164,9 +195,8 @@ def multilevel_rpn_losses(
 
 
 @under_name_scope()
-def generate_fpn_proposals(
-    multilevel_anchors, multilevel_label_logits,
-        multilevel_box_logits, image_shape2d):
+def generate_fpn_proposals(multilevel_anchors, multilevel_label_logits,
+                           multilevel_box_logits, image_shape2d):
     """
     Args:
         multilevel_anchors: #lvl RPNAnchors
@@ -190,7 +220,8 @@ def generate_fpn_proposals(
         for lvl in range(num_lvl):
             with tf.name_scope('Lvl{}'.format(lvl + 2)):
                 anchors = multilevel_anchors[lvl]
-                pred_boxes_decoded = anchors.decode_logits(multilevel_box_logits[lvl])
+                pred_boxes_decoded = anchors.decode_logits(
+                    multilevel_box_logits[lvl])
 
                 proposal_boxes, proposal_scores = generate_rpn_proposals(
                     tf.reshape(pred_boxes_decoded, [-1, 4]),
@@ -202,21 +233,25 @@ def generate_fpn_proposals(
         proposal_boxes = tf.concat(all_boxes, axis=0)  # nx4
         proposal_scores = tf.concat(all_scores, axis=0)  # n
         proposal_topk = tf.minimum(tf.size(proposal_scores), fpn_nms_topk)
-        proposal_scores, topk_indices = tf.nn.top_k(proposal_scores, k=proposal_topk, sorted=False)
+        proposal_scores, topk_indices = tf.nn.top_k(
+            proposal_scores, k=proposal_topk, sorted=False)
         proposal_boxes = tf.gather(proposal_boxes, topk_indices)
     else:
         for lvl in range(num_lvl):
             with tf.name_scope('Lvl{}'.format(lvl + 2)):
                 anchors = multilevel_anchors[lvl]
-                pred_boxes_decoded = anchors.decode_logits(multilevel_box_logits[lvl])
+                pred_boxes_decoded = anchors.decode_logits(
+                    multilevel_box_logits[lvl])
                 all_boxes.append(tf.reshape(pred_boxes_decoded, [-1, 4]))
-                all_scores.append(tf.reshape(multilevel_label_logits[lvl], [-1]))
+                all_scores.append(
+                    tf.reshape(multilevel_label_logits[lvl], [-1]))
         all_boxes = tf.concat(all_boxes, axis=0)
         all_scores = tf.concat(all_scores, axis=0)
         proposal_boxes, proposal_scores = generate_rpn_proposals(
-            all_boxes, all_scores, image_shape2d,
-            cfg.RPN.TRAIN_PRE_NMS_TOPK if ctx.is_training else cfg.RPN.TEST_PRE_NMS_TOPK,
-            cfg.RPN.TRAIN_POST_NMS_TOPK if ctx.is_training else cfg.RPN.TEST_POST_NMS_TOPK)
+            all_boxes, all_scores, image_shape2d, cfg.RPN.TRAIN_PRE_NMS_TOPK
+            if ctx.is_training else cfg.RPN.TEST_PRE_NMS_TOPK,
+            cfg.RPN.TRAIN_POST_NMS_TOPK
+            if ctx.is_training else cfg.RPN.TEST_POST_NMS_TOPK)
 
     tf.sigmoid(proposal_scores, name='probs')  # for visualization
     return tf.stop_gradient(proposal_boxes, name='boxes'), \

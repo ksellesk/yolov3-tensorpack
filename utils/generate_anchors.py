@@ -37,7 +37,9 @@ import numpy as np
 #       [ -79., -167.,   96.,  184.],
 #       [-167., -343.,  184.,  360.]])
 
-def generate_anchors(base_size=16, ratios=[0.5, 1, 2],
+
+def generate_anchors(base_size=16,
+                     ratios=[0.5, 1, 2],
                      scales=2**np.arange(3, 6)):
     """
     Generate anchor (reference) windows by enumerating aspect ratios X
@@ -46,9 +48,12 @@ def generate_anchors(base_size=16, ratios=[0.5, 1, 2],
 
     base_anchor = np.array([1, 1, base_size, base_size], dtype='float32') - 1
     ratio_anchors = _ratio_enum(base_anchor, ratios)
-    anchors = np.vstack([_scale_enum(ratio_anchors[i, :], scales)
-                         for i in range(ratio_anchors.shape[0])])
+    anchors = np.vstack([
+        _scale_enum(ratio_anchors[i, :], scales)
+        for i in range(ratio_anchors.shape[0])
+    ])
     return anchors
+
 
 def _whctrs(anchor):
     """
@@ -61,6 +66,7 @@ def _whctrs(anchor):
     y_ctr = anchor[1] + 0.5 * (h - 1)
     return w, h, x_ctr, y_ctr
 
+
 def _mkanchors(ws, hs, x_ctr, y_ctr):
     """
     Given a vector of widths (ws) and heights (hs) around a center
@@ -69,11 +75,10 @@ def _mkanchors(ws, hs, x_ctr, y_ctr):
 
     ws = ws[:, np.newaxis]
     hs = hs[:, np.newaxis]
-    anchors = np.hstack((x_ctr - 0.5 * (ws - 1),
-                         y_ctr - 0.5 * (hs - 1),
-                         x_ctr + 0.5 * (ws - 1),
-                         y_ctr + 0.5 * (hs - 1)))
+    anchors = np.hstack((x_ctr - 0.5 * (ws - 1), y_ctr - 0.5 * (hs - 1),
+                         x_ctr + 0.5 * (ws - 1), y_ctr + 0.5 * (hs - 1)))
     return anchors
+
 
 def _ratio_enum(anchor, ratios):
     """
@@ -88,6 +93,7 @@ def _ratio_enum(anchor, ratios):
     anchors = _mkanchors(ws, hs, x_ctr, y_ctr)
     return anchors
 
+
 def _scale_enum(anchor, scales):
     """
     Enumerate a set of anchors for each scale wrt an anchor.
@@ -99,6 +105,7 @@ def _scale_enum(anchor, scales):
     anchors = _mkanchors(ws, hs, x_ctr, y_ctr)
     return anchors
 
+
 if __name__ == '__main__':
     #import time
     #t = time.time()
@@ -108,7 +115,9 @@ if __name__ == '__main__':
     #from IPython import embed; embed()
 
     anchors = generate_anchors(
-                16, scales=np.asarray((2, 4, 8, 16, 32), 'float32'),
-                ratios=[0.5,1,2])
+        16,
+        scales=np.asarray((2, 4, 8, 16, 32), 'float32'),
+        ratios=[0.5, 1, 2])
     print(anchors)
-    import IPython as IP; IP.embed()
+    import IPython as IP
+    IP.embed()

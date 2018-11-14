@@ -2,7 +2,6 @@
 
 import tensorflow as tf
 
-
 from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.tfutils.argscope import argscope
 from tensorpack.tfutils.scope_utils import under_name_scope, auto_reuse_variable_scope
@@ -20,8 +19,10 @@ def rpn_head(featuremap, channel, num_anchors):
         label_logits: fHxfWxNA
         box_logits: fHxfWxNAx4
     """
-    with argscope(Conv2D, data_format='channels_first',
-                  kernel_initializer=tf.random_normal_initializer(stddev=0.01)):
+    with argscope(
+            Conv2D,
+            data_format='channels_first',
+            kernel_initializer=tf.random_normal_initializer(stddev=0.01)):
         hidden = Conv2D('conv0', featuremap, channel, 3, activation=tf.nn.relu)
 
         label_logits = Conv2D('class', hidden, num_anchors, 1)
@@ -33,7 +34,9 @@ def rpn_head(featuremap, channel, num_anchors):
 
         shp = tf.shape(box_logits)  # 1x(NAx4)xfHxfW
         box_logits = tf.transpose(box_logits, [0, 2, 3, 1])  # 1xfHxfWx(NAx4)
-        box_logits = tf.reshape(box_logits, tf.stack([shp[2], shp[3], num_anchors, 4]))  # fHxfWxNAx4
+        box_logits = tf.reshape(box_logits,
+                                tf.stack([shp[2], shp[3], num_anchors,
+                                          4]))  # fHxfWxNAx4
     return label_logits, box_logits
 
 
@@ -52,8 +55,11 @@ def rpn_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     with tf.device('/cpu:0'):
         valid_mask = tf.stop_gradient(tf.not_equal(anchor_labels, -1))
         pos_mask = tf.stop_gradient(tf.equal(anchor_labels, 1))
-        nr_valid = tf.stop_gradient(tf.count_nonzero(valid_mask, dtype=tf.int32), name='num_valid_anchor')
-        nr_pos = tf.identity(tf.count_nonzero(pos_mask, dtype=tf.int32), name='num_pos_anchor')
+        nr_valid = tf.stop_gradient(
+            tf.count_nonzero(valid_mask, dtype=tf.int32),
+            name='num_valid_anchor')
+        nr_pos = tf.identity(
+            tf.count_nonzero(pos_mask, dtype=tf.int32), name='num_pos_anchor')
         # nr_pos is guaranteed >0 in C4. But in FPN. even nr_valid could be 0.
 
         valid_anchor_labels = tf.boolean_mask(anchor_labels, valid_mask)
@@ -65,18 +71,27 @@ def rpn_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
         with tf.device('/cpu:0'):
             for th in [0.5, 0.2, 0.1]:
                 valid_prediction = tf.cast(valid_label_prob > th, tf.int32)
-                nr_pos_prediction = tf.reduce_sum(valid_prediction, name='num_pos_prediction')
+                nr_pos_prediction = tf.reduce_sum(
+                    valid_prediction, name='num_pos_prediction')
                 pos_prediction_corr = tf.count_nonzero(
                     tf.logical_and(
                         valid_label_prob > th,
                         tf.equal(valid_prediction, valid_anchor_labels)),
                     dtype=tf.int32)
-                placeholder = 0.5   # A small value will make summaries appear lower.
+                placeholder = 0.5  # A small value will make summaries appear lower.
                 recall = tf.to_float(tf.truediv(pos_prediction_corr, nr_pos))
-                recall = tf.where(tf.equal(nr_pos, 0), placeholder, recall, name='recall_th{}'.format(th))
-                precision = tf.to_float(tf.truediv(pos_prediction_corr, nr_pos_prediction))
-                precision = tf.where(tf.equal(nr_pos_prediction, 0),
-                                     placeholder, precision, name='precision_th{}'.format(th))
+                recall = tf.where(
+                    tf.equal(nr_pos, 0),
+                    placeholder,
+                    recall,
+                    name='recall_th{}'.format(th))
+                precision = tf.to_float(
+                    tf.truediv(pos_prediction_corr, nr_pos_prediction))
+                precision = tf.where(
+                    tf.equal(nr_pos_prediction, 0),
+                    placeholder,
+                    precision,
+                    name='precision_th{}'.format(th))
                 summaries.extend([precision, recall])
         add_moving_summary(*summaries)
 
@@ -86,24 +101,31 @@ def rpn_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     label_loss = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
     label_loss = tf.reduce_sum(label_loss) * (1. / cfg.RPN.BATCH_PER_IM)
-    label_loss = tf.where(tf.equal(nr_valid, 0), placeholder, label_loss, name='label_loss')
+    label_loss = tf.where(
+        tf.equal(nr_valid, 0), placeholder, label_loss, name='label_loss')
 
     pos_anchor_boxes = tf.boolean_mask(anchor_boxes, pos_mask)
     pos_box_logits = tf.boolean_mask(box_logits, pos_mask)
     delta = 1.0 / 9
     box_loss = tf.losses.huber_loss(
-        pos_anchor_boxes, pos_box_logits, delta=delta,
+        pos_anchor_boxes,
+        pos_box_logits,
+        delta=delta,
         reduction=tf.losses.Reduction.SUM) / delta
     box_loss = box_loss * (1. / cfg.RPN.BATCH_PER_IM)
-    box_loss = tf.where(tf.equal(nr_pos, 0), placeholder, box_loss, name='box_loss')
+    box_loss = tf.where(
+        tf.equal(nr_pos, 0), placeholder, box_loss, name='box_loss')
 
     add_moving_summary(label_loss, box_loss, nr_valid, nr_pos)
     return label_loss, box_loss
 
 
 @under_name_scope()
-def generate_rpn_proposals(boxes, scores, img_shape,
-                           pre_nms_topk, post_nms_topk=None):
+def generate_rpn_proposals(boxes,
+                           scores,
+                           img_shape,
+                           pre_nms_topk,
+                           post_nms_topk=None):
     """
     Sample RPN proposals by the following steps:
     1. Pick top k1 by scores
@@ -139,8 +161,8 @@ def generate_rpn_proposals(boxes, scores, img_shape,
 
     # TODO not needed
     topk_valid_boxes_y1x1y2x2 = tf.reshape(
-        tf.reverse(topk_valid_boxes_x1y1x2y2, axis=[2]),
-        (-1, 4), name='nms_input_boxes')
+        tf.reverse(topk_valid_boxes_x1y1x2y2, axis=[2]), (-1, 4),
+        name='nms_input_boxes')
     nms_indices = tf.image.non_max_suppression(
         topk_valid_boxes_y1x1y2x2,
         topk_valid_scores,
@@ -151,4 +173,6 @@ def generate_rpn_proposals(boxes, scores, img_shape,
     proposal_boxes = tf.gather(topk_valid_boxes, nms_indices)
     proposal_scores = tf.gather(topk_valid_scores, nms_indices)
     tf.sigmoid(proposal_scores, name='probs')  # for visualization
-    return tf.stop_gradient(proposal_boxes, name='boxes'), tf.stop_gradient(proposal_scores, name='scores')
+    return tf.stop_gradient(
+        proposal_boxes, name='boxes'), tf.stop_gradient(
+            proposal_scores, name='scores')

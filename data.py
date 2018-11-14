@@ -6,19 +6,18 @@ import numpy as np
 import copy
 
 from tensorpack.utils.argtools import memoized, log_once
-from tensorpack.dataflow import (
-    imgaug, TestDataSpeed,
-    MultiProcessMapDataZMQ, MultiThreadMapData,
-    MapDataComponent, DataFromList)
+from tensorpack.dataflow import (imgaug, TestDataSpeed, MultiProcessMapDataZMQ,
+                                 MultiThreadMapData, MapDataComponent,
+                                 DataFromList)
 from tensorpack.utils import logger
 # import tensorpack.utils.viz as tpviz
 
 from coco import COCODetection
 from utils.generate_anchors import generate_anchors
 from utils.np_box_ops import area as np_area
-from common import (
-    DataFromListOfDict, CustomResize, filter_boxes_inside_shape,
-    box_to_point8, point8_to_box, segmentation_to_mask)
+from common import (DataFromListOfDict, CustomResize,
+                    filter_boxes_inside_shape, box_to_point8, point8_to_box,
+                    segmentation_to_mask)
 from config import config as cfg
 
 try:
@@ -33,8 +32,7 @@ try:
             return box
 
         ret = cocomask.iou(
-            to_xywh(A), to_xywh(B),
-            np.zeros((len(B),), dtype=np.bool))
+            to_xywh(A), to_xywh(B), np.zeros((len(B), ), dtype=np.bool))
         # can accelerate even more, if using float32
         return ret.astype('float32')
 
@@ -84,9 +82,8 @@ def get_all_anchors(stride=None, sizes=None):
     K = shifts.shape[0]
 
     A = cell_anchors.shape[0]
-    field_of_anchors = (
-        cell_anchors.reshape((1, A, 4)) +
-        shifts.reshape((1, K, 4)).transpose((1, 0, 2)))
+    field_of_anchors = (cell_anchors.reshape((1, A, 4)) + shifts.reshape(
+        (1, K, 4)).transpose((1, 0, 2)))
     field_of_anchors = field_of_anchors.reshape((field_size, field_size, A, 4))
     # FSxFSxAx4
     # Many rounding happens inside the anchor code anyway
@@ -109,7 +106,7 @@ def get_all_anchors_fpn(strides=None, sizes=None):
     assert len(strides) == len(sizes)
     foas = []
     for stride, size in zip(strides, sizes):
-        foa = get_all_anchors(stride=stride, sizes=(size,))
+        foa = get_all_anchors(stride=stride, sizes=(size, ))
         foas.append(foa)
     return foas
 
@@ -126,14 +123,14 @@ def get_anchor_labels(anchors, gt_boxes, crowd_boxes):
         anchor_labels: (A,) int. Each element is {-1, 0, 1}
         anchor_boxes: Ax4. Contains the target gt_box for each anchor when the anchor is fg.
     """
+
     # This function will modify labels and return the filtered inds
     def filter_box_label(labels, value, max_num):
         curr_inds = np.where(labels == value)[0]
         if len(curr_inds) > max_num:
             disable_inds = np.random.choice(
-                curr_inds, size=(len(curr_inds) - max_num),
-                replace=False)
-            labels[disable_inds] = -1    # ignore them
+                curr_inds, size=(len(curr_inds) - max_num), replace=False)
+            labels[disable_inds] = -1  # ignore them
             curr_inds = np.where(labels == value)[0]
         return curr_inds
 
@@ -147,7 +144,7 @@ def get_anchor_labels(anchors, gt_boxes, crowd_boxes):
     anchors_with_max_iou_per_gt = np.where(box_ious == ious_max_per_gt)[0]
 
     # Setting NA labels: 1--fg 0--bg -1--ignore
-    anchor_labels = -np.ones((NA,), dtype='int32')   # NA,
+    anchor_labels = -np.ones((NA, ), dtype='int32')  # NA,
 
     # the order of setting neg/pos labels matter
     anchor_labels[anchors_with_max_iou_per_gt] = 1
@@ -176,7 +173,7 @@ def get_anchor_labels(anchors, gt_boxes, crowd_boxes):
         # No valid bg in this image, skip.
         raise MalformedData("No valid background for RPN!")
     target_num_bg = cfg.RPN.BATCH_PER_IM - len(fg_inds)
-    filter_box_label(anchor_labels, 0, target_num_bg)   # ignore return values
+    filter_box_label(anchor_labels, 0, target_num_bg)  # ignore return values
 
     # Set anchor boxes: the best gt_box for each fg anchor
     anchor_boxes = np.zeros((NA, 4), dtype='float32')
@@ -205,18 +202,24 @@ def get_rpn_anchor_input(im, boxes, is_crowd):
     featuremap_anchors_flatten = all_anchors.reshape((-1, 4))
 
     # only use anchors inside the image
-    inside_ind, inside_anchors = filter_boxes_inside_shape(featuremap_anchors_flatten, im.shape[:2])
+    inside_ind, inside_anchors = filter_boxes_inside_shape(
+        featuremap_anchors_flatten, im.shape[:2])
     # obtain anchor labels and their corresponding gt boxes
-    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
+    anchor_labels, anchor_gt_boxes = get_anchor_labels(
+        inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
 
     # Fill them back to original size: fHxfWx1, fHxfWx4
     anchorH, anchorW = all_anchors.shape[:2]
-    featuremap_labels = -np.ones((anchorH * anchorW * cfg.RPN.NUM_ANCHOR, ), dtype='int32')
+    featuremap_labels = -np.ones(
+        (anchorH * anchorW * cfg.RPN.NUM_ANCHOR, ), dtype='int32')
     featuremap_labels[inside_ind] = anchor_labels
-    featuremap_labels = featuremap_labels.reshape((anchorH, anchorW, cfg.RPN.NUM_ANCHOR))
-    featuremap_boxes = np.zeros((anchorH * anchorW * cfg.RPN.NUM_ANCHOR, 4), dtype='float32')
+    featuremap_labels = featuremap_labels.reshape((anchorH, anchorW,
+                                                   cfg.RPN.NUM_ANCHOR))
+    featuremap_boxes = np.zeros((anchorH * anchorW * cfg.RPN.NUM_ANCHOR, 4),
+                                dtype='float32')
     featuremap_boxes[inside_ind, :] = anchor_gt_boxes
-    featuremap_boxes = featuremap_boxes.reshape((anchorH, anchorW, cfg.RPN.NUM_ANCHOR, 4))
+    featuremap_boxes = featuremap_boxes.reshape((anchorH, anchorW,
+                                                 cfg.RPN.NUM_ANCHOR, 4))
     return featuremap_labels, featuremap_boxes
 
 
@@ -239,8 +242,10 @@ def get_multilevel_rpn_anchor_input(im, boxes, is_crowd):
     flatten_anchors_per_level = [k.reshape((-1, 4)) for k in anchors_per_level]
     all_anchors_flatten = np.concatenate(flatten_anchors_per_level, axis=0)
 
-    inside_ind, inside_anchors = filter_boxes_inside_shape(all_anchors_flatten, im.shape[:2])
-    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
+    inside_ind, inside_anchors = filter_boxes_inside_shape(
+        all_anchors_flatten, im.shape[:2])
+    anchor_labels, anchor_gt_boxes = get_anchor_labels(
+        inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
 
     # map back to all_anchors, then split to each level
     num_all_anchors = all_anchors_flatten.shape[0]
@@ -253,13 +258,12 @@ def get_multilevel_rpn_anchor_input(im, boxes, is_crowd):
     multilevel_inputs = []
     for level_anchor in anchors_per_level:
         assert level_anchor.shape[2] == len(cfg.RPN.ANCHOR_RATIOS)
-        anchor_shape = level_anchor.shape[:3]   # fHxfWxNUM_ANCHOR_RATIOS
+        anchor_shape = level_anchor.shape[:3]  # fHxfWxNUM_ANCHOR_RATIOS
         num_anchor_this_level = np.prod(anchor_shape)
         end = start + num_anchor_this_level
         multilevel_inputs.append(
-            (all_labels[start: end].reshape(anchor_shape),
-             all_boxes[start: end, :].reshape(anchor_shape + (4,))
-             ))
+            (all_labels[start:end].reshape(anchor_shape),
+             all_boxes[start:end, :].reshape(anchor_shape + (4, ))))
         start = end
     assert end == num_all_anchors, "{} != {}".format(end, num_all_anchors)
     return multilevel_inputs
@@ -304,18 +308,23 @@ def get_train_dataflow():
     # Valid training images should have at least one fg box.
     # But this filter shall not be applied for testing.
     num = len(roidbs)
-    roidbs = list(filter(lambda img: len(img['boxes'][img['is_crowd'] == 0]) > 0, roidbs))
-    logger.info("Filtered {} images which contain no non-crowd groudtruth boxes. Total #images for training: {}".format(
-        num - len(roidbs), len(roidbs)))
+    roidbs = list(
+        filter(lambda img: len(img['boxes'][img['is_crowd'] == 0]) > 0,
+               roidbs))
+    logger.info(
+        "Filtered {} images which contain no non-crowd groudtruth boxes. Total #images for training: {}"
+        .format(num - len(roidbs), len(roidbs)))
 
     ds = DataFromList(roidbs, shuffle=True)
 
-    aug = imgaug.AugmentorList(
-        [CustomResize(cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE),
-         imgaug.Flip(horiz=True)])
+    aug = imgaug.AugmentorList([
+        CustomResize(cfg.PREPROC.TRAIN_SHORT_EDGE_SIZE, cfg.PREPROC.MAX_SIZE),
+        imgaug.Flip(horiz=True)
+    ])
 
     def preprocess(roidb):
-        fname, boxes, klass, is_crowd = roidb['file_name'], roidb['boxes'], roidb['class'], roidb['is_crowd']
+        fname, boxes, klass, is_crowd = roidb['file_name'], roidb[
+            'boxes'], roidb['class'], roidb['is_crowd']
         boxes = np.copy(boxes)
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
         assert im is not None, fname
@@ -334,28 +343,37 @@ def get_train_dataflow():
         # rpn anchor:
         try:
             if cfg.MODE_FPN:
-                multilevel_anchor_inputs = get_multilevel_rpn_anchor_input(im, boxes, is_crowd)
-                for i, (anchor_labels, anchor_boxes) in enumerate(multilevel_anchor_inputs):
+                multilevel_anchor_inputs = get_multilevel_rpn_anchor_input(
+                    im, boxes, is_crowd)
+                for i, (anchor_labels,
+                        anchor_boxes) in enumerate(multilevel_anchor_inputs):
                     ret['anchor_labels_lvl{}'.format(i + 2)] = anchor_labels
                     ret['anchor_boxes_lvl{}'.format(i + 2)] = anchor_boxes
             else:
                 # anchor_labels, anchor_boxes
-                ret['anchor_labels'], ret['anchor_boxes'] = get_rpn_anchor_input(im, boxes, is_crowd)
+                ret['anchor_labels'], ret[
+                    'anchor_boxes'] = get_rpn_anchor_input(
+                        im, boxes, is_crowd)
 
-            boxes = boxes[is_crowd == 0]    # skip crowd boxes in training target
+            boxes = boxes[is_crowd == 0]  # skip crowd boxes in training target
             klass = klass[is_crowd == 0]
             ret['gt_boxes'] = boxes
             ret['gt_labels'] = klass
             if not len(boxes):
                 raise MalformedData("No valid gt_boxes!")
         except MalformedData as e:
-            log_once("Input {} is filtered for training: {}".format(fname, str(e)), 'warn')
+            log_once(
+                "Input {} is filtered for training: {}".format(fname, str(e)),
+                'warn')
             return None
 
         if cfg.MODE_MASK:
             # augmentation will modify the polys in-place
             segmentation = copy.deepcopy(roidb['segmentation'])
-            segmentation = [segmentation[k] for k in range(len(segmentation)) if not is_crowd[k]]
+            segmentation = [
+                segmentation[k] for k in range(len(segmentation))
+                if not is_crowd[k]
+            ]
             assert len(segmentation) == len(boxes)
 
             # Apply augmentation on polygon coordinates.
@@ -363,8 +381,9 @@ def get_train_dataflow():
             masks = []
             for polys in segmentation:
                 polys = [aug.augment_coords(p, params) for p in polys]
-                masks.append(segmentation_to_mask(polys, im.shape[0], im.shape[1]))
-            masks = np.asarray(masks, dtype='uint8')    # values in {0, 1}
+                masks.append(
+                    segmentation_to_mask(polys, im.shape[0], im.shape[1]))
+            masks = np.asarray(masks, dtype='uint8')  # values in {0, 1}
             ret['gt_masks'] = masks
 
             # from viz import draw_annotation, draw_mask
@@ -387,18 +406,22 @@ def get_eval_dataflow(shard=0, num_shards=1):
     Args:
         shard, num_shards: to get subset of evaluation data
     """
-    roidbs = COCODetection.load_many(cfg.DATA.BASEDIR, cfg.DATA.VAL, add_gt=False)
+    roidbs = COCODetection.load_many(
+        cfg.DATA.BASEDIR, cfg.DATA.VAL, add_gt=False)
     num_imgs = len(roidbs)
     img_per_shard = num_imgs // num_shards
-    img_range = (shard * img_per_shard, (shard + 1) * img_per_shard if shard + 1 < num_shards else num_imgs)
+    img_range = (shard * img_per_shard, (shard + 1) * img_per_shard
+                 if shard + 1 < num_shards else num_imgs)
 
     # no filter for training
-    ds = DataFromListOfDict(roidbs[img_range[0]: img_range[1]], ['file_name', 'id'])
+    ds = DataFromListOfDict(roidbs[img_range[0]:img_range[1]],
+                            ['file_name', 'id'])
 
     def f(fname):
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
         assert im is not None, fname
         return im
+
     ds = MapDataComponent(ds, f, 0)
     # Evaluation itself may be multi-threaded, therefore don't add prefetch here.
     return ds

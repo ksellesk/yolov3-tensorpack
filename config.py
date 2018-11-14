@@ -34,8 +34,10 @@ class AttrDict():
 
     def to_dict(self):
         """Convert to a nested dict. """
-        return {k: v.to_dict() if isinstance(v, AttrDict) else v
-                for k, v in self.__dict__.items() if not k.startswith('_')}
+        return {
+            k: v.to_dict() if isinstance(v, AttrDict) else v
+            for k, v in self.__dict__.items() if not k.startswith('_')
+        }
 
     def update_args(self, args):
         """Update from command line args. """
@@ -69,26 +71,28 @@ class AttrDict():
 
 
 config = AttrDict()
-_C = config     # short alias to avoid coding
+_C = config  # short alias to avoid coding
 
 # mode flags ---------------------
 _C.TRAINER = 'replicated'  # options: 'horovod', 'replicated'
-_C.MODE_MASK = True        # FasterRCNN or MaskRCNN
+_C.MODE_MASK = True  # FasterRCNN or MaskRCNN
 _C.MODE_FPN = False
 
 # dataset -----------------------
 _C.DATA.BASEDIR = '/path/to/your/COCO/DIR'
-_C.DATA.TRAIN = ['train2014', 'valminusminival2014']   # i.e. trainval35k, AKA train2017
+_C.DATA.TRAIN = ['train2014',
+                 'valminusminival2014']  # i.e. trainval35k, AKA train2017
 # For now, only support evaluation on single dataset
 _C.DATA.VAL = 'minival2014'  # AKA val2017
-_C.DATA.NUM_CATEGORY = 80    # 80 categories.
-_C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, to be populated later by data loader. The first is BG.
+_C.DATA.NUM_CATEGORY = 80  # 80 categories.
+_C.DATA.CLASS_NAMES = [
+]  # NUM_CLASS (NUM_CATEGORY+1) strings, to be populated later by data loader. The first is BG.
 
 # basemodel ----------------------
-_C.BACKBONE.WEIGHTS = ''   # /path/to/weights.npz
-_C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 6, 3]     # for resnet50
+_C.BACKBONE.WEIGHTS = ''  # /path/to/weights.npz
+_C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 6, 3]  # for resnet50
 # RESNET_NUM_BLOCK = [3, 4, 23, 3]    # for resnet101
-_C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers
+_C.BACKBONE.FREEZE_AFFINE = False  # do not train affine parameters inside norm layers
 _C.BACKBONE.NORM = 'FreezeBN'  # options: FreezeBN, SyncBN, GN
 _C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2
 
@@ -104,17 +108,17 @@ _C.BACKBONE.TF_PAD_MODE = False
 _C.BACKBONE.STRIDE_1X1 = False  # True for MSRA models
 
 # schedule -----------------------
-_C.TRAIN.NUM_GPUS = None         # by default, will be set from code
+_C.TRAIN.NUM_GPUS = None  # by default, will be set from code
 _C.TRAIN.WEIGHT_DECAY = 1e-4
 _C.TRAIN.BASE_LR = 1e-2  # defined for a total batch size of 8. Otherwise it will be adjusted automatically
-_C.TRAIN.WARMUP = 1000   # in terms of iterations. This is not affected by #GPUs
+_C.TRAIN.WARMUP = 1000  # in terms of iterations. This is not affected by #GPUs
 _C.TRAIN.STEPS_PER_EPOCH = 500
 
 # LR_SCHEDULE means "steps" only when total batch size is 8.
 # Otherwise the actual steps to decrease learning rate are computed from the schedule.
 # Therefore, there is *no need* to modify the config if you only change the number of GPUs.
 # LR_SCHEDULE = [120000, 160000, 180000]  # "1x" schedule in detectron
-_C.TRAIN.LR_SCHEDULE = [240000, 320000, 360000]    # "2x" schedule in detectron
+_C.TRAIN.LR_SCHEDULE = [240000, 320000, 360000]  # "2x" schedule in detectron
 _C.TRAIN.EVAL_PERIOD = 25  # period (epochs) to run eva
 
 # preprocessing --------------------
@@ -129,7 +133,7 @@ _C.PREPROC.PIXEL_STD = [58.395, 57.12, 57.375]
 
 # anchors -------------------------
 _C.RPN.ANCHOR_STRIDE = 16
-_C.RPN.ANCHOR_SIZES = (32, 64, 128, 256, 512)   # sqrtarea of the anchor box
+_C.RPN.ANCHOR_SIZES = (32, 64, 128, 256, 512)  # sqrtarea of the anchor box
 _C.RPN.ANCHOR_RATIOS = (0.5, 1., 2.)
 _C.RPN.POSITIVE_ANCHOR_THRESH = 0.7
 _C.RPN.NEGATIVE_ANCHOR_THRESH = 0.3
@@ -140,14 +144,14 @@ _C.RPN.BATCH_PER_IM = 256  # total (across FPN levels) number of anchors that ar
 _C.RPN.MIN_SIZE = 0
 _C.RPN.PROPOSAL_NMS_THRESH = 0.7
 _C.RPN.CROWD_OVERLAP_THRESH = 0.7  # boxes overlapping crowd will be ignored.
-_C.RPN.HEAD_DIM = 1024      # used in C4 only
+_C.RPN.HEAD_DIM = 1024  # used in C4 only
 
 # RPN proposal selection -------------------------------
 # for C4
 _C.RPN.TRAIN_PRE_NMS_TOPK = 12000
 _C.RPN.TRAIN_POST_NMS_TOPK = 2000
 _C.RPN.TEST_PRE_NMS_TOPK = 6000
-_C.RPN.TEST_POST_NMS_TOPK = 1000   # if you encounter OOM in inference, set this to a smaller number
+_C.RPN.TEST_POST_NMS_TOPK = 1000  # if you encounter OOM in inference, set this to a smaller number
 # for FPN, #proposals per-level and #proposals after merging are (for now) the same
 # if FPN.PROPOSAL_MODE = 'Joint', these options have no effect
 _C.RPN.TRAIN_PER_LEVEL_NMS_TOPK = 2000
@@ -155,12 +159,16 @@ _C.RPN.TEST_PER_LEVEL_NMS_TOPK = 1000
 
 # fastrcnn training ---------------------
 _C.FRCNN.BATCH_PER_IM = 512
-_C.FRCNN.BBOX_REG_WEIGHTS = [10., 10., 5., 5.]  # Better but non-standard setting: [20, 20, 10, 10]
+_C.FRCNN.BBOX_REG_WEIGHTS = [
+    10., 10., 5., 5.
+]  # Better but non-standard setting: [20, 20, 10, 10]
 _C.FRCNN.FG_THRESH = 0.5
 _C.FRCNN.FG_RATIO = 0.25  # fg ratio in a ROI batch
 
 # FPN -------------------------
-_C.FPN.ANCHOR_STRIDES = (4, 8, 16, 32, 64)  # strides for each FPN level. Must be the same length as ANCHOR_SIZES
+_C.FPN.ANCHOR_STRIDES = (
+    4, 8, 16, 32,
+    64)  # strides for each FPN level. Must be the same length as ANCHOR_SIZES
 _C.FPN.PROPOSAL_MODE = 'Level'  # 'Level', 'Joint'
 _C.FPN.NUM_CHANNEL = 256
 _C.FPN.NORM = 'None'  # 'None', 'GN'
@@ -170,7 +178,7 @@ _C.FPN.FRCNN_HEAD_FUNC = 'fastrcnn_2fc_head'
 # choices: fastrcnn_2fc_head, fastrcnn_4conv1fc_{,gn_}head
 _C.FPN.FRCNN_CONV_HEAD_DIM = 256
 _C.FPN.FRCNN_FC_HEAD_DIM = 1024
-_C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_head'   # choices: maskrcnn_up4conv_{,gn_}head
+_C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_head'  # choices: maskrcnn_up4conv_{,gn_}head
 
 # Mask-RCNN
 _C.MRCNN.HEAD_DIM = 256
@@ -179,7 +187,8 @@ _C.MRCNN.HEAD_DIM = 256
 _C.FPN.CASCADE = False
 _C.CASCADE.NUM_STAGES = 3
 _C.CASCADE.IOUS = [0.5, 0.6, 0.7]
-_C.CASCADE.BBOX_REG_WEIGHTS = [[10., 10., 5., 5.], [20., 20., 10., 10.], [30., 30., 15., 15.]]
+_C.CASCADE.BBOX_REG_WEIGHTS = [[10., 10., 5., 5.], [20., 20., 10., 10.],
+                               [30., 30., 15., 15.]]
 
 # testing -----------------------
 _C.TEST.FRCNN_NMS_THRESH = 0.5
@@ -187,7 +196,7 @@ _C.TEST.FRCNN_NMS_THRESH = 0.5
 # Smaller threshold value gives significantly better mAP. But we use 0.05 for consistency with Detectron.
 # mAP with 1e-4 threshold can be found at https://github.com/tensorpack/tensorpack/commit/26321ae58120af2568bdbf2269f32aa708d425a8#diff-61085c48abee915b584027e1085e1043  # noqa
 _C.TEST.RESULT_SCORE_THRESH = 0.05
-_C.TEST.RESULT_SCORE_THRESH_VIS = 0.3   # only visualize confident results
+_C.TEST.RESULT_SCORE_THRESH_VIS = 0.3  # only visualize confident results
 _C.TEST.RESULTS_PER_IM = 100
 
 
@@ -206,11 +215,13 @@ def finalize_configs(is_training):
     _C.RPN.NUM_ANCHOR = len(_C.RPN.ANCHOR_SIZES) * len(_C.RPN.ANCHOR_RATIOS)
     assert len(_C.FPN.ANCHOR_STRIDES) == len(_C.RPN.ANCHOR_SIZES)
     # image size into the backbone has to be multiple of this number
-    _C.FPN.RESOLUTION_REQUIREMENT = _C.FPN.ANCHOR_STRIDES[3]  # [3] because we build FPN with features r2,r3,r4,r5
+    _C.FPN.RESOLUTION_REQUIREMENT = _C.FPN.ANCHOR_STRIDES[
+        3]  # [3] because we build FPN with features r2,r3,r4,r5
 
     if _C.MODE_FPN:
         size_mult = _C.FPN.RESOLUTION_REQUIREMENT * 1.
-        _C.PREPROC.MAX_SIZE = np.ceil(_C.PREPROC.MAX_SIZE / size_mult) * size_mult
+        _C.PREPROC.MAX_SIZE = np.ceil(
+            _C.PREPROC.MAX_SIZE / size_mult) * size_mult
         assert _C.FPN.PROPOSAL_MODE in ['Level', 'Joint']
         assert _C.FPN.FRCNN_HEAD_FUNC.endswith('_head')
         assert _C.FPN.MRCNN_HEAD_FUNC.endswith('_head')
@@ -252,4 +263,5 @@ def finalize_configs(is_training):
         os.environ['TF_CUDNN_USE_AUTOTUNE'] = '0'
 
     _C.freeze()
-    logger.info("Config: ------------------------------------------\n" + str(_C))
+    logger.info("Config: ------------------------------------------\n" +
+                str(_C))

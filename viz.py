@@ -37,9 +37,10 @@ def draw_proposal_recall(img, proposals, proposal_scores, gt_boxes):
         proposal_scores: NP
         gt_boxes: NG
     """
-    box_ious = np_iou(gt_boxes, proposals)    # ng x np
+    box_ious = np_iou(gt_boxes, proposals)  # ng x np
     box_ious_argsort = np.argsort(-box_ious, axis=1)
-    good_proposals_ind = box_ious_argsort[:, :3]   # for each gt, find 3 best proposals
+    good_proposals_ind = box_ious_argsort[:, :
+                                          3]  # for each gt, find 3 best proposals
     good_proposals_ind = np.unique(good_proposals_ind.ravel())
 
     proposals = proposals[good_proposals_ind, :]
@@ -58,7 +59,10 @@ def draw_predictions(img, boxes, scores):
         return img
     labels = scores.argmax(axis=1)
     scores = scores.max(axis=1)
-    tags = ["{},{:.2f}".format(cfg.DATA.CLASS_NAMES[lb], score) for lb, score in zip(labels, scores)]
+    tags = [
+        "{},{:.2f}".format(cfg.DATA.CLASS_NAMES[lb], score)
+        for lb, score in zip(labels, scores)
+    ]
     return viz.draw_boxes(img, boxes, tags)
 
 
@@ -72,8 +76,8 @@ def draw_final_outputs(img, results):
 
     tags = []
     for r in results:
-        tags.append(
-            "{},{:.2f}".format(cfg.DATA.CLASS_NAMES[r.class_id], r.score))
+        tags.append("{},{:.2f}".format(cfg.DATA.CLASS_NAMES[r.class_id],
+                                       r.score))
     boxes = np.asarray([r.box for r in results])
     ret = viz.draw_boxes(img, boxes, tags)
 
@@ -94,7 +98,8 @@ def draw_mask(im, mask, alpha=0.5, color=None):
     """
     if color is None:
         color = PALETTE_RGB[np.random.choice(len(PALETTE_RGB))][::-1]
-    im = np.where(np.repeat((mask > 0)[:, :, None], 3, axis=2),
-                  im * (1 - alpha) + color * alpha, im)
+    im = np.where(
+        np.repeat((mask > 0)[:, :, None], 3, axis=2),
+        im * (1 - alpha) + color * alpha, im)
     im = im.astype('uint8')
     return im

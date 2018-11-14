@@ -9,8 +9,8 @@ from config import config as cfg
 
 
 class CascadeRCNNHead(object):
-    def __init__(self, proposals,
-                 roi_func, fastrcnn_head_func, image_shape2d, num_classes):
+    def __init__(self, proposals, roi_func, fastrcnn_head_func, image_shape2d,
+                 num_classes):
         """
         Args:
             proposals: BoxProposals
@@ -25,9 +25,11 @@ class CascadeRCNNHead(object):
 
         self.is_training = get_current_tower_context().is_training
         if self.is_training:
+
             @tf.custom_gradient
             def scale_gradient(x):
                 return x, lambda dy: dy * (1.0 / self.num_cascade_stages)
+
             self.scale_gradient = scale_gradient
             self.gt_boxes = proposals.gt_boxes
             self.gt_labels = proposals.gt_labels
@@ -60,12 +62,16 @@ class CascadeRCNNHead(object):
             FastRCNNHead
             Nx4, updated boxes
         """
-        reg_weights = tf.constant(cfg.CASCADE.BBOX_REG_WEIGHTS[stage], dtype=tf.float32)
+        reg_weights = tf.constant(
+            cfg.CASCADE.BBOX_REG_WEIGHTS[stage], dtype=tf.float32)
         pooled_feature = self.roi_func(proposals.boxes)  # N,C,S,S
         pooled_feature = self.scale_gradient(pooled_feature)
         head_feature = self.fastrcnn_head_func('head', pooled_feature)
         label_logits, box_logits = fastrcnn_outputs(
-            'outputs', head_feature, self.num_classes, class_agnostic_regression=True)
+            'outputs',
+            head_feature,
+            self.num_classes,
+            class_agnostic_regression=True)
         head = FastRCNNHead(proposals, box_logits, label_logits, reg_weights)
 
         refined_boxes = head.decoded_output_boxes_class_agnostic()
@@ -87,9 +93,10 @@ class CascadeRCNNHead(object):
                 labels_per_box = tf.gather(self.gt_labels, best_iou_ind)
                 fg_mask = max_iou_per_box >= iou_threshold
                 fg_inds_wrt_gt = tf.boolean_mask(best_iou_ind, fg_mask)
-                labels_per_box = tf.stop_gradient(labels_per_box * tf.to_int64(fg_mask))
-                return BoxProposals(
-                    boxes, labels_per_box, fg_inds_wrt_gt, self.gt_boxes, self.gt_labels)
+                labels_per_box = tf.stop_gradient(
+                    labels_per_box * tf.to_int64(fg_mask))
+                return BoxProposals(boxes, labels_per_box, fg_inds_wrt_gt,
+                                    self.gt_boxes, self.gt_labels)
         else:
             return BoxProposals(boxes)
 
@@ -106,7 +113,7 @@ class CascadeRCNNHead(object):
             Nx#classx4
         """
         ret = self._cascade_boxes[-1]
-        ret = tf.expand_dims(ret, 1)     # class-agnostic
+        ret = tf.expand_dims(ret, 1)  # class-agnostic
         return tf.tile(ret, [1, self.num_classes, 1])
 
     def output_scores(self, name=None):
@@ -114,6 +121,9 @@ class CascadeRCNNHead(object):
         Returns:
             Nx#class
         """
-        scores = [head.output_scores('cascade_scores_stage{}'.format(idx + 1))
-                  for idx, head in enumerate(self._heads)]
-        return tf.multiply(tf.add_n(scores), (1.0 / self.num_cascade_stages), name=name)
+        scores = [
+            head.output_scores('cascade_scores_stage{}'.format(idx + 1))
+            for idx, head in enumerate(self._heads)
+        ]
+        return tf.multiply(
+            tf.add_n(scores), (1.0 / self.num_cascade_stages), name=name)
